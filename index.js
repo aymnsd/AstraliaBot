@@ -17,6 +17,7 @@ const client = new Client({
 client.snipeMap = new Map();
 client.giveaways = new Map();
 client.logsChannels = {};
+client.mediaOnlyChannels = new Set();
 
 // ============================================================
 //  QUAND LE BOT EST PRÊT
@@ -24,10 +25,6 @@ client.logsChannels = {};
 
 client.once('ready', async () => {
     console.log(`✅ ${client.user.tag} est en ligne !`);
-
-    // ============================================================
-    //  COMMANDES SLASH
-    // ============================================================
 
     const commands = [
         // Utilitaires
@@ -81,8 +78,6 @@ client.on('messageCreate', async (message) => {
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // --- Utilitaires ---
-
     if (command === 'say') {
         if (!message.member.permissions.has('ManageMessages')) {
             return message.reply('❌ Tu n\'as pas la permission.');
@@ -107,8 +102,6 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: `Supprimé à ${msg.createdAt.toLocaleTimeString()}` });
         await message.channel.send({ embeds: [embed] });
     }
-
-    // --- Modération ---
 
     if (command === 'clear') {
         if (!message.member.permissions.has('ManageMessages')) {
@@ -220,21 +213,18 @@ client.on('messageCreate', async (message) => {
         if (!message.member.permissions.has('ManageChannels')) {
             return message.reply('❌ Tu n\'as pas la permission.');
         }
-        // Active/désactive le mode media-only (permet uniquement les médias)
-        const current = client.mediaOnlyChannels?.has(message.channel.id) || false;
-        if (current) {
+        if (client.mediaOnlyChannels.has(message.channel.id)) {
             client.mediaOnlyChannels.delete(message.channel.id);
             await message.reply('❌ Mode media-only désactivé dans ce salon.');
         } else {
-            if (!client.mediaOnlyChannels) client.mediaOnlyChannels = new Set();
             client.mediaOnlyChannels.add(message.channel.id);
-            await message.reply('✅ Mode media-only activé dans ce salon. Seuls les médias sont autorisés.');
+            await message.reply('✅ Mode media-only activé dans ce salon.');
         }
     }
 });
 
 // ============================================================
-//  SNIPE (cache des messages supprimés)
+//  SNIPE
 // ============================================================
 
 client.on('messageDelete', (message) => {
@@ -263,39 +253,12 @@ client.on('interactionCreate', async (interaction) => {
             .setTitle('📋 Centre de commandes')
             .setDescription('Voici la liste de toutes les commandes disponibles.')
             .addFields(
-                { name: '━━━━━━━━━━━━━━━━━━━', value: '▸ **Utilitaires**', inline: false },
-                { name: '`/embed`', value: 'Créer un embed personnalisé', inline: true },
-                { name: '`/help`', value: 'Afficher cette aide', inline: true },
-                { name: '`/userinfo`', value: 'Infos d\'un utilisateur', inline: true },
-                { name: '`/serverinfo`', value: 'Infos du serveur', inline: true },
-                { name: '`/clear`', value: 'Supprimer des messages', inline: true },
-                { name: '`/refresh`', value: 'Recréer le salon', inline: true },
-                { name: '`/invite`', value: 'Lien d\'invitation du bot', inline: true },
-                { name: '`/gw`', value: 'Lancer un giveaway', inline: true },
-                { name: '`/reroll`', value: 'Rechoisir un gagnant', inline: true },
-                { name: '`/poll`', value: 'Créer un sondage', inline: true },
-
-                { name: '━━━━━━━━━━━━━━━━━━━', value: '▸ **Modération**', inline: false },
-                { name: '`/ban`', value: 'Bannir un membre', inline: true },
-                { name: '`/tempban`', value: 'Bannissement temporaire', inline: true },
-                { name: '`/unban`', value: 'Débannir un membre', inline: true },
-                { name: '`/kick`', value: 'Expulser un membre', inline: true },
-                { name: '`/mute`', value: 'Mute temporaire', inline: true },
-                { name: '`/unmute`', value: 'Enlever le mute', inline: true },
-
-                { name: '━━━━━━━━━━━━━━━━━━━', value: '▸ **Configuration**', inline: false },
-                { name: '`/config`', value: 'Panneau de configuration', inline: true },
-
-                { name: '━━━━━━━━━━━━━━━━━━━', value: '▸ **Commandes préfixées (+)**', inline: false },
-                { name: '`+say`', value: 'Envoyer un message', inline: true },
-                { name: '`+ping`', value: 'Latence du bot', inline: true },
-                { name: '`+clear`', value: 'Supprimer des messages', inline: true },
-                { name: '`+lock`', value: 'Verrouiller le salon', inline: true },
-                { name: '`+unlock`', value: 'Déverrouiller le salon', inline: true },
-                { name: '`+snipe`', value: 'Récupérer le dernier message supprimé', inline: true },
-                { name: '`+media_only`', value: 'Activer/désactiver le mode media-only', inline: true }
+                { name: '📦 Utilitaires', value: '`/help`, `/embed`, `/userinfo`, `/serverinfo`, `/clear`, `/refresh`, `/invite`, `/gw`, `/reroll`, `/poll`', inline: false },
+                { name: '🛡️ Modération', value: '`/ban`, `/tempban`, `/unban`, `/kick`, `/mute`, `/unmute`', inline: false },
+                { name: '⚙️ Configuration', value: '`/config`', inline: false },
+                { name: '⌨️ Préfixées (+)', value: '`+say`, `+ping`, `+clear`, `+lock`, `+unlock`, `+snipe`, `+media_only`, `+ban`, `+kick`, `+mute`, `+unmute`', inline: false }
             )
-            .setFooter({ text: 'Astralia 🐉 · Tape /help pour réafficher cette aide' })
+            .setFooter({ text: 'Astralia 🐉 · Tape /help' })
             .setTimestamp();
 
         return interaction.reply({ embeds: [embed] });
@@ -376,7 +339,7 @@ client.on('interactionCreate', async (interaction) => {
         const category = channel.parent;
         const topic = channel.topic;
 
-        await channel.clone({
+        const newChannel = await channel.clone({
             name: channel.name,
             topic: topic,
             position: position,
@@ -390,7 +353,7 @@ client.on('interactionCreate', async (interaction) => {
         });
 
         await channel.delete();
-        return interaction.reply({ content: '✅ Salon recréé !', ephemeral: true });
+        return interaction.reply({ content: `✅ Salon recréé : ${newChannel}`, ephemeral: true });
     }
 
     // ---------- INVITE ----------
@@ -445,16 +408,20 @@ client.on('interactionCreate', async (interaction) => {
         });
 
         setTimeout(async () => {
-            const msg = await interaction.channel.messages.fetch(message.id);
-            const reaction = msg.reactions.cache.get('🎉');
-            if (!reaction) return interaction.channel.send('❌ Aucun participant.');
+            try {
+                const msg = await interaction.channel.messages.fetch(message.id);
+                const reaction = msg.reactions.cache.get('🎉');
+                if (!reaction) return interaction.channel.send('❌ Aucun participant.');
 
-            const users = await reaction.users.fetch();
-            const participants = users.filter(u => !u.bot);
-            if (participants.size === 0) return interaction.channel.send('❌ Aucun participant.');
+                const users = await reaction.users.fetch();
+                const participants = users.filter(u => !u.bot);
+                if (participants.size === 0) return interaction.channel.send('❌ Aucun participant.');
 
-            const winner = participants.random();
-            await interaction.channel.send(`🎉 **Félicitations à ${winner} !** Tu as gagné : **${prize}** !`);
+                const winner = participants.random();
+                await interaction.channel.send(`🎉 **Félicitations à ${winner} !** Tu as gagné : **${prize}** !`);
+            } catch (error) {
+                console.error('Erreur giveaway :', error);
+            }
         }, duration * 60000);
     }
 
@@ -580,7 +547,7 @@ client.on('interactionCreate', async (interaction) => {
                 description = `✅ Logs configurés dans ${channel}`;
                 break;
             case 'arrivals':
-                description = '✉️ **Message de bienvenue permanent**\nConfigure le message de bienvenue dans les paramètres du serveur ou avec `!setwelcome`.';
+                description = '✉️ **Message de bienvenue permanent**\nConfigure le message de bienvenue dans les paramètres du serveur.';
                 break;
             case 'greet':
                 description = '👋 **Message de bienvenue temporaire**\nConfigure le message qui se supprime avec la commande `!setgreet`.';
@@ -613,11 +580,11 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ============================================================
-//  MESSAGE DE BIENVENUE (optionnel)
+//  BIENVENUE
 // ============================================================
 
 client.on('guildMemberAdd', async (member) => {
-    const channel = member.guild.channels.cache.get('1536880794516201482'); // #bienvenue
+    const channel = member.guild.channels.cache.get('1536880794516201482');
     if (!channel) return;
 
     const embed = new EmbedBuilder()
@@ -641,7 +608,7 @@ client.on('guildMemberAdd', async (member) => {
 });
 
 // ============================================================
-//  COMMANDE !verif (pour le message de vérification NSFW)
+//  VÉRIFICATION NSFW (!verif)
 // ============================================================
 
 client.on('messageCreate', async (message) => {
@@ -676,7 +643,7 @@ client.on('messageCreate', async (message) => {
 });
 
 // ============================================================
-//  GESTION DU BOUTON "VERIFIE TOI ICI"
+//  BOUTON VERIFICATION NSFW
 // ============================================================
 
 client.on('interactionCreate', async (interaction) => {
@@ -711,7 +678,7 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ============================================================
-//  SERVEUR HTTP POUR RENDER (Keep Alive)
+//  SERVEUR HTTP POUR RENDER
 // ============================================================
 
 const http = require('http');
